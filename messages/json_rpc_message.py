@@ -11,6 +11,3 @@ class JSONRPCMessage(BaseModel):
 
     class Config:
         extra = "allow"
-
-
-

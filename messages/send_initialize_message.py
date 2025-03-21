@@ -5,29 +5,35 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from messages.json_rpc_message import JSONRPCMessage
 
+
 # Models for JSON-RPC Communication
 class MCPClientCapabilities(BaseModel):
     roots: dict = Field(default_factory=lambda: {"listChanged": True})
     sampling: dict = Field(default_factory=dict)
 
+
 class MCPClientInfo(BaseModel):
     name: str = "PythonMCPClient"
     version: str = "1.0.0"
+
 
 class InitializeParams(BaseModel):
     protocolVersion: str
     capabilities: MCPClientCapabilities
     clientInfo: MCPClientInfo
 
+
 class ServerInfo(BaseModel):
     name: str
     version: str
+
 
 class ServerCapabilities(BaseModel):
     logging: dict = Field(default_factory=dict)
     prompts: Optional[dict] = None
     resources: Optional[dict] = None
     tools: Optional[dict] = None
+
 
 class InitializeResult(BaseModel):
     protocolVersion: str
@@ -39,7 +45,7 @@ async def send_initialize(
     read_stream: MemoryObjectReceiveStream,
     write_stream: MemoryObjectSendStream,
 ) -> Optional[InitializeResult]:
-    """ Send an initialization request to the server and process its response. """
+    """Send an initialization request to the server and process its response."""
 
     # set initialize params
     init_params = InitializeParams(
@@ -77,7 +83,7 @@ async def send_initialize(
                     # debug
                     logging.error(f"Server initialization error: {response.error}")
                     return None
-                
+
                 # we have a result
                 if response.result:
                     try:
@@ -106,7 +112,7 @@ async def send_initialize(
         logging.error("Timeout waiting for server initialization response")
         return None
     except Exception as e:
-        # unexpected error 
+        # unexpected error
         logging.error(f"Unexpected error during server initialization: {e}")
         raise
 

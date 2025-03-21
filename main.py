@@ -12,9 +12,11 @@ from messages.send_initialize_message import send_initialize
 from messages.send_ping_message import send_ping
 from stdio_client import stdio_client, get_default_environment
 from stdio_server_shutdown import shutdown_stdio_server
+from chat_handler import handle_chat_mode
 
 # Default path for the configuration file
 DEFAULT_CONFIG_FILE = "server_config.json"
+
 
 async def handle_command(command: str, read_stream, write_stream):
     """Handle specific commands dynamically."""
@@ -27,6 +29,8 @@ async def handle_command(command: str, read_stream, write_stream):
             print("\nFetching Tools List...")
             tools = await send_tools_list(read_stream, write_stream)
             print("Tools List:", tools)
+        elif command == "":
+            await handle_chat_mode(read_stream, write_stream)
         elif command == "list-resources":
             print("\nFetching Resources List...")
             resources = await send_resources_list(read_stream, write_stream)
@@ -49,6 +53,7 @@ async def handle_command(command: str, read_stream, write_stream):
             print("  list-tools    - Display available tools")
             print("  list-resources- Display available resources")
             print("  list-prompts  - Display available prompts")
+            print("  chat          - Enter chat mode")
             print("  clear         - Clear the screen")
             print("  help          - Show this help message")
             print("  quit/exit     - Exit the program")
@@ -57,29 +62,31 @@ async def handle_command(command: str, read_stream, write_stream):
             print("Type 'help' for available commands")
     except Exception as e:
         print(f"\nError executing command: {e}")
-    
+
     return True
+
 
 async def get_input():
     """Get input asynchronously."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, lambda: input("\n> ").strip().lower())
 
+
 async def interactive_mode(read_stream, write_stream):
     """Run the CLI in interactive mode."""
     print("\nWelcome to the Interactive MCP Command-Line Tool")
     print("Type 'help' for available commands or 'quit' to exit")
-    
+
     while True:
         try:
             command = await get_input()
             if not command:
                 continue
-                
+
             should_continue = await handle_command(command, read_stream, write_stream)
             if not should_continue:
                 return
-                
+
         except KeyboardInterrupt:
             print("\nUse 'quit' or 'exit' to close the program")
         except EOFError:
@@ -87,16 +94,19 @@ async def interactive_mode(read_stream, write_stream):
         except Exception as e:
             print(f"\nError: {e}")
 
+
 class GracefulExit(Exception):
     """Custom exception for handling graceful exits."""
+
     pass
+
 
 async def main(config_path: str, server_name: str, command: str = None) -> None:
     """Main function to manage server initialization, communication, and shutdown."""
     try:
         # Load server configuration
         server_params = await load_config(config_path, server_name)
-        
+
         # Establish stdio communication
         async with stdio_client(server_params) as (read_stream, write_stream):
             # Initialize the server
@@ -111,7 +121,7 @@ async def main(config_path: str, server_name: str, command: str = None) -> None:
             else:
                 # Interactive mode
                 await interactive_mode(read_stream, write_stream)
-                
+
             # Break the event loop to ensure clean exit
             loop = asyncio.get_event_loop()
             loop.stop()
@@ -123,6 +133,7 @@ async def main(config_path: str, server_name: str, command: str = None) -> None:
     finally:
         # Ensure we exit the process
         os._exit(0)
+
 
 if __name__ == "__main__":
     # Argument parser setup
@@ -152,8 +163,8 @@ if __name__ == "__main__":
     # Configure logging
     logging.basicConfig(
         level=logging.WARNING,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        stream=sys.stderr
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        stream=sys.stderr,
     )
 
     try:

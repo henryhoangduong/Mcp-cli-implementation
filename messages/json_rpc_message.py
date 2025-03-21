@@ -8,6 +8,7 @@ class JSONRPCMessage(BaseModel):
     params: Optional[Dict[str, Any]] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
+    method: Optional[str] = None
 
     class Config:
         extra = "allow"

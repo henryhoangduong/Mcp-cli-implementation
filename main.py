@@ -10,6 +10,7 @@ from config import load_config
 from stdio_server_shutdown import shutdown_stdio_server
 import stdio_client
 import argparse
+from stdio_client import get_default_environment, stdio_client
 
 DEFAULT_CONFIG = "server_config.json"
 
@@ -28,12 +29,15 @@ async def main(config_path: str, server_name: str) -> None:
         print("Starting server process .... ", file=sys.stderr)
         server_params = await load_config(config_path, server_name)
         process = await anyio.open_process(
-            [server_params.command, *server_params],
+            [server_params.command, *server_params.args],
+            env=server_params.env or get_default_environment(),
             stdin=True,
             stdout=True,
             stderr=sys.stderr,
         )
+
         async with stdio_client(server_params) as (read_stream, write_stream):
+
             init_result = await send_initialize(read_stream, write_stream)
             if not init_result:
                 print(f"Server initialization failed", file=sys.stderr)

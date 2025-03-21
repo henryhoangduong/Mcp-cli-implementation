@@ -28,7 +28,7 @@ async def stdio_client(server: StdioServerParameters):
     process = await anyio.open_process(
         [server.command, *server.args],
         env=server.env or get_default_environment(),
-        stderr=sys.h,
+        stderr=sys.stderr,
     )
 
     async def stdout_reader():
@@ -50,6 +50,9 @@ async def stdio_client(server: StdioServerParameters):
                             data = json.loads(line)
                             message = JSONRPCMessage.model_validate(data)
                             await read_stream_writer.send(message)
+                        except json.JSONDecodeError as exc:
+                            # Log JSON decoding errors
+                            logging.error(f"JSON decode error: {exc}. Line: {line.strip()}")
                         except Exception as exc:
                             logging.error(
                                 f"Error processing message: {exc}. Line: {line.strip()}"
@@ -82,7 +85,7 @@ async def stdio_client(server: StdioServerParameters):
                     try:
                         json_str = message.model_dump_json(exclude_none=True)
                         logging.debug(f"Sending: {json_str}")
-                        await process.stdin.send(json_str + "\n").encode()
+                        await process.stdin.send((json_str + "\n").encode())
                     except Exception as e:
                         logging.error(f"Error writing to stdin: {e}")
         except anyio.ClosedResourceError:

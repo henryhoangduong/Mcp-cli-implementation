@@ -20,11 +20,10 @@ async def load_config(config_path: str, server_name: str) -> StdioServerParamete
             error_msg = f"Server '{server_name}' not found in configuration file."
             logging.error(error_msg)
             raise ValueError(error_msg)
-
         result = StdioServerParameters(
             command=server_config["command"],
             args=server_config.get("args", []),
-            env=server_config.et("env"),
+            env=server_config.get("env"),
         )
         logging.debug(
             f"Loaded config: command='{result.command}', args={result.args}, env={result.env}"

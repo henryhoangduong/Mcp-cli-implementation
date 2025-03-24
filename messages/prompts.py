@@ -11,3 +11,4 @@ async def send_prompts_list(
         write_stream=write_stream,
         method="prompts/list",
     )
+    return response

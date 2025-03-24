@@ -3,7 +3,7 @@ import os
 from openai import OpenAI
 from system_prompt_generator import SystemPromptGenerator
 from dotenv import load_dotenv
-from messages.tools import send_tools_list, call_tool
+from tools_handler import handle_tool_call, convert_to_openai_tools, fetch_tools
 
 load_dotenv()
 
@@ -14,91 +14,80 @@ if not os.getenv("OPEN_AI_KEY"):
 async def handle_chat_mode(read_stream, write_stream):
     """Enter chat mode with the multi-call support for autonomous tool chaining"""
     try:
-        print("\nFetching tools for chat mode")
-        # Fetch tools dynamically
-        tools_response = await send_tools_list(read_stream, write_stream)
-
         # Extract tools list
-        tools = tools_response.get("tools", [])
-        if not isinstance(tools, list) or not all(
-            isinstance(tool, dict) for tool in tools
-        ):
-            print(f"Invalid tools format recieved. Expected a list of dictionaries")
+        tools = await fetch_tools(read_stream, write_stream)
+        if not tools:
+            print("No tools available, Exiting chat mode.")
             return
+        # Generate the system prompt
+        system_prompt = generate_system_prompt(tools)
 
         # Generate system prompt with CoT
         prompt_generator = SystemPromptGenerator()
-        tools_json = {"tools": tools}
-        system_prompt = prompt_generator.generate_prompt(tools_json)
-        system_prompt += "\nReason step-by-step. If multiple steps are needed, call tools iteratively to achieve the goal.  if you are unsure the schema of data sources, you can check if there is a tool to describe a data source"
-        client = OpenAI(api_key=os.getenv("OPEN_API_KEY"))
-        print("\nEntering chat mode. Type 'exit' to quit.")
-        openai_tools = [
-            {
-                type: "function",
-                "function": {
-                    "name": tool["name"],
-                    "parameters": tool.get("inputSchema", {}),
-                },
-            }
-            for tool in tools
-        ]
 
-        # Debugging: Print OpenAI tools configuration
-        print("Configured OpenAI tools: ", openai_tools)
+        # Convert tools to openai format
+        openai_tools = convert_to_openai_tools(tools)
+
+        # Create the client
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        # Build the context
         conversation_history = [{"role": "system", "content": system_prompt}]
+
+        # Enter chat mode
+        print("\nEntering chat mode. Type 'exit' to quit.")
         while True:
-            user_message = input("\nYou: ").strip()
-            if user_message.lower() in ["exit", "quti"]:
+            user_message = input("nYou: ").strip()
+            if user_message.lower() in ["exit", "quit"]:
                 print("Exiting chat mode.")
                 break
-            # Add user message to conversation history
-            while True:
-                completion = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=conversation_history,
-                    tools=openai_tools,
-                )
 
-                # Access the response or tool call 
-                response_message  = completion.choices[0].message
-                if hasattr(response_message, "tool_calls") and response_message.tool_calls:
+            # add the item to the histroy
+            conversation_history.append({"role": "user", "content": user_message})
 
-                    # Debugging: print the tool call response
-                    print("Tool call response: ",response_message.tool_calls)
-                    
-                    for tool_call in response_message.tool_calls:
-                        tool_name = tool_call.function.name
-                        raw_arguments = tool_call.function.arguments
-                        try:
-                            tool_args  = json.loads(raw_arguments) if raw_arguments else {}
-                        except json.JSONDecodeError:
-                            print(f"Error decoding arguments for tool '{tool_name}': {raw_arguments}")
-                            continue
-                        print(f"\nTools '{tool_name}' invoked arguments: {tool_args}")
-
-                        # Call the tool using provided arguments
-                        tool_response = await call_tool(tool_name, tool_args, read_stream, write_stream)
-                        if tool_response.get("isError"):
-                            print(f"Error calling tool: {tool_response.get("error")}")
-                            break
-
-                        # Process and format tool reponse
-                        response_content = tool_response.get("content",[])
-                        formatted_response = ""
-                        if isinstance(response_content, list):
-                            for item in response_content:
-                                if item.get("type") == "text":
-                                    formatted_response += item.get("text", "No content") + "\n"
-                        else:
-                            formatted_response = str(response_content)
-
-                else:
-                     # Handle normal assistant response
-                     response_content = response_message.content
-                     print("Assistant:", response_content)
-                     conversation_history.append({"role": "assistant", "content": response_content})
-                     break
+            # process conversation
+            await process_conversation(
+                client, conversation_history, openai_tools, read_stream, write_stream
+            )
 
     except Exception as e:
         print(f"\nError in chat mode: {e}")
+
+
+def generate_system_prompt(tools):
+    """Generate system prompt for the assistant."""
+    prompt_generator = SystemPromptGenerator()
+    tools_json = {"tools": tools}
+
+    # generate the system prompt
+    system_prompt = prompt_generator.generate_prompt(tools_json)
+    system_prompt += "\nReason step-by-step. If multiple steps are needed, call tools iteratively to achieve the goal. If unsure about data sources, use tools to describe them."
+
+    # return the system prompt
+    return system_prompt
+
+
+async def process_conversation(
+    client, conversation_history, openai_tools, read_stream, write_stream
+):
+    """Process the conversation loop, handling tool calls and responses."""
+    while True:
+        completion = client.chat.completion.create(
+            model="gpt-4o-mini",
+            messages=conversation_history,
+            tools=openai_tools,
+        )
+        response_message = completion.choices[0].message
+        if hasattr(response_message, "tool_calls") and response_message.tool_calls:
+            print("Tool call response:", response_message.tool_calls)
+            for tool_call in response_message.tool_calls:
+                await handle_tool_call(
+                    tool_call, conversation_history, read_stream, write_stream
+                )
+        else:
+            response_content = response_message.content
+            print("Assistant:", response_content)
+            conversation_history.append(
+                {"role": "assistant", "content": response_content}
+            )
+            break

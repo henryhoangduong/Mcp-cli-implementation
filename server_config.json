@@ -1,12 +1,12 @@
 {
-    "mcpServers":{
-        "sqlite":{
-            "command":"uvx",
-            "args":[
-                "mcp-server-sqlite",
-                "--db-path",
-                          "/Users/mac/Projects/Python/mcp-cli-implementation/test.db"
-            ]
-        }
+  "mcpServers": {
+    "sqlite": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-sqlite",
+        "--db-path",
+        "/Users/mac/Projects/Python/mcp-cli-implementation/test.db"
+      ]
     }
+  }
 }
